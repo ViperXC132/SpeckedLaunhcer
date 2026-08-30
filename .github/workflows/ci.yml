@@ -9,13 +9,16 @@ on:
 
 env:
   NODE_VERSION: 22
-  SPECKED_CI_ENABLED: true
+  SPECKED_CI_ENABLED: 'true'
 
 jobs:
   verify:
-    if: ${{ env.SPECKED_CI_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Check CI switch
+        if: ${{ env.SPECKED_CI_ENABLED != 'true' }}
+        run: echo "Specked CI is disabled" && exit 0
+
       - name: Checkout
         uses: actions/checkout@v4
 
