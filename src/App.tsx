@@ -1,64 +1,16 @@
-import { useState } from 'react'
-import { Gamepad2, Library, Compass, Server, Palette, FolderOpen, Settings, Play, Plus, Search, Download, ChevronRight, Zap } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { Gamepad2, Library, Compass, Server, Palette, FolderOpen, Settings, Play, Plus, Search, Download, ChevronRight, Zap, Trash2, Cpu, X } from 'lucide-react'
 
 type Page = 'home' | 'instances' | 'content' | 'servers' | 'customize' | 'files' | 'settings'
-
-const nav: { id: Page; label: string; icon: typeof Gamepad2 }[] = [
-  { id: 'home', label: 'Home', icon: Gamepad2 },
-  { id: 'instances', label: 'Instances', icon: Library },
-  { id: 'content', label: 'Content', icon: Compass },
-  { id: 'servers', label: 'Servers', icon: Server },
-  { id: 'customize', label: 'Customize', icon: Palette },
-  { id: 'files', label: 'Files', icon: FolderOpen },
-]
-
-function App() {
-  const [page, setPage] = useState<Page>('home')
-  const [search, setSearch] = useState('')
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand"><div className="brand-mark">S</div><div><b>specked</b><span>launcher</span></div></div>
-        <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(id)}><Icon size={18}/><span>{label}</span></button>)}</nav>
-        <div className="sidebar-bottom">
-          <div className="profile"><div className="avatar">V</div><div><b>V24</b><span>Offline account</span></div><ChevronRight size={15}/></div>
-          <button className="nav-item" onClick={() => setPage('settings')}><Settings size={18}/><span>Settings</span></button>
-        </div>
-      </aside>
-
-      <main className="main">
-        <header className="topbar"><div className="crumb">{page === 'home' ? 'Welcome back' : nav.find(n => n.id === page)?.label}</div><div className="top-actions"><div className="search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search Specked" /></div><button className="icon-btn"><Download size={17}/></button></div></header>
-
-        {page === 'home' && <Home onNavigate={setPage}/>} 
-        {page !== 'home' && <Placeholder page={page} search={search} />}
-      </main>
-    </div>
-  )
-}
-
-function Home({ onNavigate }: { onNavigate: (p: Page) => void }) {
-  return <div className="content">
-    <section className="hero">
-      <div className="hero-copy"><div className="eyebrow"><Zap size={13}/> SPECKED LAUNCHER</div><h1>Ready to play?</h1><p>Your Minecraft, your way. Pick an instance and jump straight in.</p><button className="primary" onClick={() => onNavigate('instances')}><Play size={17} fill="currentColor"/> Launch Minecraft</button></div>
-      <div className="hero-orb"><div className="orb-grid"/><span>S</span></div>
-    </section>
-
-    <div className="section-head"><div><h2>Quick launch</h2><p>Your recently played instances</p></div><button className="text-btn" onClick={() => onNavigate('instances')}>View all <ChevronRight size={15}/></button></div>
-    <section className="instance-grid">
-      <InstanceCard name="Survival" version="1.21.8 • Vanilla" accent="purple" onClick={() => onNavigate('instances')} />
-      <InstanceCard name="Modded" version="1.20.1 • Fabric" accent="blue" onClick={() => onNavigate('instances')} />
-      <button className="new-card" onClick={() => onNavigate('instances')}><div><Plus size={22}/></div><b>Create instance</b><span>Start something new</span></button>
-    </section>
-
-    <div className="lower-grid">
-      <section className="panel"><div className="section-head compact"><div><h2>Discover</h2><p>Fresh content for your next world</p></div><button className="text-btn" onClick={() => onNavigate('content')}>Explore <ChevronRight size={15}/></button></div><div className="discover"><div className="discover-icon">✦</div><div><b>Content Hub</b><span>Browse mods, modpacks, shaders and more from Modrinth & CurseForge.</span></div></div></section>
-      <section className="panel stats"><h2>Playtime</h2><div className="stat-number">24<span>h</span> 18<span>m</span></div><div className="bars">{[38,62,45,76,54,88,68,92,71,84,60,96].map((h,i)=><i key={i} style={{height:`${h}%`}}/> )}</div><span className="muted">Last 30 days</span></section>
-    </div>
-  </div>
-}
-
-function InstanceCard({ name, version, accent, onClick }: { name:string; version:string; accent:string; onClick:()=>void }) { return <button className="instance-card" onClick={onClick}><div className={`instance-art ${accent}`}><span>⛏</span></div><div className="instance-info"><div><b>{name}</b><span>{version}</span></div><div className="play-circle"><Play size={15} fill="currentColor"/></div></div></button> }
-function Placeholder({ page, search }: { page:Page; search:string }) { const title = page === 'settings' ? 'Settings' : nav.find(n=>n.id===page)?.label; return <div className="content"><div className="page-title"><div><div className="eyebrow">SPECKED</div><h1>{title}</h1><p>{search ? `Searching for “${search}”` : 'This section is ready for the next build.'}</p></div></div><div className="empty"><div className="empty-mark"><Zap/></div><h2>Building this out</h2><p>The launcher foundation is in place. Next up: real Minecraft instances, content APIs, servers and customization.</p></div></div> }
-
+type Instance = { id:string; name:string; version:string; loader:string; java_path:string|null; memory_mb:number }
+const nav: {id:Page;label:string;icon:typeof Gamepad2}[]=[{id:'home',label:'Home',icon:Gamepad2},{id:'instances',label:'Instances',icon:Library},{id:'content',label:'Content',icon:Compass},{id:'servers',label:'Servers',icon:Server},{id:'customize',label:'Customize',icon:Palette},{id:'files',label:'Files',icon:FolderOpen}]
+const fallback:Instance[]=[{id:'survival-1',name:'Survival',version:'1.21.8',loader:'Vanilla',java_path:null,memory_mb:4096},{id:'modded-2',name:'Modded',version:'1.20.1',loader:'Fabric',java_path:null,memory_mb:6144}]
+async function loadInstances(){try{return await invoke<Instance[]>('list_instances')}catch{return JSON.parse(localStorage.getItem('specked.instances')||'null')||fallback}}
+function App(){const[page,setPage]=useState<Page>('home'),[search,setSearch]=useState(''),[instances,setInstances]=useState<Instance[]>([]),[showCreate,setShowCreate]=useState(false);useEffect(()=>{loadInstances().then(setInstances)},[]);const refresh=()=>loadInstances().then(setInstances);const create=async(name:string,version:string,loader:string)=>{try{await invoke('create_instance',{name,version,loader})}catch{const next=[...instances,{id:`${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${Date.now()}`,name,version,loader,java_path:null,memory_mb:4096}];localStorage.setItem('specked.instances',JSON.stringify(next))}await refresh();setShowCreate(false);setPage('instances')};const remove=async(id:string)=>{try{await invoke('delete_instance',{id})}catch{localStorage.setItem('specked.instances',JSON.stringify(instances.filter(i=>i.id!==id)))}refresh()};return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">S</div><div><b>specked</b><span>launcher</span></div></div><nav>{nav.map(({id,label,icon:Icon})=><button key={id} className={page===id?'nav-item active':'nav-item'} onClick={()=>setPage(id)}><Icon size={18}/><span>{label}</span></button>)}</nav><div className="sidebar-bottom"><div className="profile"><div className="avatar">V</div><div><b>V24</b><span>Offline account</span></div><ChevronRight size={15}/></div><button className={page==='settings'?'nav-item active':'nav-item'} onClick={()=>setPage('settings')}><Settings size={18}/><span>Settings</span></button></div></aside><main className="main"><header className="topbar"><div className="crumb">{page==='home'?'Welcome back':nav.find(n=>n.id===page)?.label||'Settings'}</div><div className="top-actions"><div className="search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search Specked"/></div><button className="icon-btn"><Download size={17}/></button></div></header>{page==='home'&&<Home instances={instances} onNavigate={setPage} onCreate={()=>setShowCreate(true)}/>} {page==='instances'&&<Instances instances={instances} onCreate={()=>setShowCreate(true)} onDelete={remove}/>} {page!=='home'&&page!=='instances'&&<Placeholder page={page} search={search}/>}</main>{showCreate&&<CreateModal onClose={()=>setShowCreate(false)} onCreate={create}/>}</div>}
+function Home({instances,onNavigate,onCreate}:{instances:Instance[];onNavigate:(p:Page)=>void;onCreate:()=>void}){return <div className="content"><section className="hero"><div className="hero-copy"><div className="eyebrow"><Zap size={13}/> SPECKED LAUNCHER</div><h1>Ready to play?</h1><p>Your Minecraft, your way. Pick an instance and jump straight in.</p><button className="primary" onClick={()=>onNavigate('instances')}><Play size={17} fill="currentColor"/> Launch Minecraft</button></div><div className="hero-orb"><div className="orb-grid"/><span>S</span></div></section><div className="section-head"><div><h2>Quick launch</h2><p>Your recently played instances</p></div><button className="text-btn" onClick={()=>onNavigate('instances')}>View all <ChevronRight size={15}/></button></div><section className="instance-grid">{instances.slice(0,2).map((i,n)=><InstanceCard key={i.id} instance={i} accent={n?'blue':'purple'} onClick={()=>onNavigate('instances')}/>)}<button className="new-card" onClick={onCreate}><div><Plus size={22}/></div><b>Create instance</b><span>Start something new</span></button></section><div className="lower-grid"><section className="panel"><div className="section-head compact"><div><h2>Discover</h2><p>Fresh content for your next world</p></div><button className="text-btn" onClick={()=>onNavigate('content')}>Explore <ChevronRight size={15}/></button></div><div className="discover"><div className="discover-icon">✦</div><div><b>Content Hub</b><span>Browse mods, modpacks, shaders and more from Modrinth & CurseForge.</span></div></div></section><section className="panel stats"><h2>Playtime</h2><div className="stat-number">24<span>h</span> 18<span>m</span></div><div className="bars">{[38,62,45,76,54,88,68,92,71,84,60,96].map((h,i)=><i key={i} style={{height:`${h}%`}}/>)}</div><span className="muted">Last 30 days</span></section></div></div>}
+function Instances({instances,onCreate,onDelete}:{instances:Instance[];onCreate:()=>void;onDelete:(id:string)=>void}){return <div className="content"><div className="page-title instance-header"><div><div className="eyebrow"><Library size={12}/> MINECRAFT INSTANCES</div><h1>Your instances</h1><p>Create isolated Minecraft profiles with their own version, loader and memory settings.</p></div><button className="primary" onClick={onCreate}><Plus size={16}/> New instance</button></div><div className="instance-list">{instances.map(i=><div className="instance-row" key={i.id}><div className="instance-art small purple"><span>⛏</span></div><div className="row-main"><b>{i.name}</b><span>Minecraft {i.version} · {i.loader}</span></div><div className="row-meta"><span><Cpu size={13}/> {i.memory_mb} MB</span><button className="play-small"><Play size={13} fill="currentColor"/> Play</button><button className="danger" onClick={()=>onDelete(i.id)} title="Delete instance"><Trash2 size={15}/></button></div></div>)}</div></div>}
+function InstanceCard({instance,accent,onClick}:{instance:Instance;accent:string;onClick:()=>void}){return <button className="instance-card" onClick={onClick}><div className={`instance-art ${accent}`}><span>⛏</span></div><div className="instance-info"><div><b>{instance.name}</b><span>{instance.version} • {instance.loader}</span></div><div className="play-circle"><Play size={15} fill="currentColor"/></div></div></button>}
+function CreateModal({onClose,onCreate}:{onClose:()=>void;onCreate:(name:string,version:string,loader:string)=>void}){const[name,setName]=useState(''),[version,setVersion]=useState('1.21.8'),[loader,setLoader]=useState('Vanilla');return <div className="modal-backdrop"><form className="modal" onSubmit={e=>{e.preventDefault();if(name.trim())onCreate(name.trim(),version,loader)}}><button type="button" className="modal-close" onClick={onClose}><X size={17}/></button><div className="eyebrow">NEW INSTANCE</div><h2>Create an instance</h2><p>Set up an isolated Minecraft profile.</p><label>Name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="My Survival World"/></label><label>Version<select value={version} onChange={e=>setVersion(e.target.value)}><option>1.21.8</option><option>1.21.7</option><option>1.21.6</option><option>1.20.1</option></select></label><label>Loader<select value={loader} onChange={e=>setLoader(e.target.value)}><option>Vanilla</option><option>Fabric</option><option>Forge</option><option>NeoForge</option><option>Quilt</option></select></label><button className="primary submit" disabled={!name.trim()}><Plus size={16}/> Create instance</button></form></div>}
+function Placeholder({page,search}:{page:Page;search:string}){const title=page==='settings'?'Settings':nav.find(n=>n.id===page)?.label;return <div className="content"><div className="page-title"><div><div className="eyebrow">SPECKED</div><h1>{title}</h1><p>{search?`Searching for “${search}”`:'This section is ready for the next build.'}</p></div></div><div className="empty"><div className="empty-mark"><Zap/></div><h2>Building this out</h2><p>The launcher foundation is in place. Next up: real Minecraft downloads, content APIs, servers and customization.</p></div></div>}
 export default App
