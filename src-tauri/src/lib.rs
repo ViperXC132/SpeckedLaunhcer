@@ -71,7 +71,7 @@ pub fn detect_java() -> Option<String> {
 }
 
 #[tauri::command]
-pub fn app_version() -> &'static str { "0.1.0" }
+pub fn app_version() -> &'static str { "1.0.0" }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
